@@ -56,7 +56,7 @@ const activeCount = computed(() => {
 })
 
 const clearCompleted = () => {
-  todos.value = todos.value.filter(todo => !todo.completed)
+  todos.value = todos.value.filter((todo) => !todo.completed)
 }
 </script>
 
@@ -74,9 +74,7 @@ const clearCompleted = () => {
       <button @click="addTodo">
         <PlusIcon :size="16" />
       </button>
-      <button class="clear-btn"
-      @click="clearCompleted"
-      >Clear Completed</button>
+      <button class="clear-btn" @click="clearCompleted">Clear Completed</button>
     </div>
     <ul>
       <li v-for="todo in todos" :key="todo.id">
@@ -107,6 +105,20 @@ const clearCompleted = () => {
 </template>
 
 <style scoped>
+main {
+  background: linear-gradient(
+    135deg,
+    #fff8e1 0%,
+    /* Premium warm cream */ #f5f5f5 50%,
+    /* Light gray middle */ #e6e6e6 100% /* Subtle gray depth */
+  );
+  min-height: 100vh;
+  margin: 0;
+  padding: 20px;
+  color: #333;
+  background-attachment: fixed;
+}
+
 .delete-btn {
   color: #ef4444;
   background: none;
