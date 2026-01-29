@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Edit, PlusIcon, Save, Trash2Icon } from 'lucide-vue-next'
 
 interface Todo {
@@ -27,6 +27,20 @@ const addTodo = () => {
   todos.value.push(newTodo)
   newTodoText.value = ''
 }
+watch(
+  todos,
+  (newTodos) => {
+    localStorage.setItem('todo_data', JSON.stringify(newTodos))
+  },
+  { deep: true },
+)
+
+onMounted(() => {
+  const savedData = localStorage.getItem('todo_data')
+  if (savedData) {
+    todos.value = JSON.parse(savedData)
+  }
+})
 
 const deleteTodo = (id: number) => {
   todos.value = todos.value.filter((todo) => todo.id !== id)
@@ -36,11 +50,20 @@ const toggleEdit = (todo: Todo) => {
   // inverse the value of editing
   todo.isEditing = !todo.isEditing
 }
+
+const activeCount = computed(() => {
+  return todos.value.filter((todo) => !todo.completed).length
+})
+
+const clearCompleted = () => {
+  todos.value = todos.value.filter(todo => !todo.completed)
+}
 </script>
 
 <template>
   <main>
     <h1>My todolist</h1>
+    <p>Remaining tasks: {{ activeCount }}</p>
     <div>
       <input
         type="text"
@@ -51,6 +74,9 @@ const toggleEdit = (todo: Todo) => {
       <button @click="addTodo">
         <PlusIcon :size="16" />
       </button>
+      <button class="clear-btn"
+      @click="clearCompleted"
+      >Clear Completed</button>
     </div>
     <ul>
       <li v-for="todo in todos" :key="todo.id">
@@ -106,5 +132,13 @@ const toggleEdit = (todo: Todo) => {
 .completed {
   text-decoration: line-through;
   opacity: 0.6;
+}
+
+.clear-btn {
+  background-color: #f58181;
+  padding: 8px;
+  border-radius: 25px;
+  height: 39px;
+  cursor: pointer;
 }
 </style>
