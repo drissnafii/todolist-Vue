@@ -107,19 +107,6 @@ const appName = ref('My Todolist');
 </template>
 
 <style scoped>
-main {
-  background: linear-gradient(
-    135deg,
-    #fff8e1 0%,
-    /* Premium warm cream */ #f5f5f5 50%,
-    /* Light gray middle */ #e6e6e6 100% /* Subtle gray depth */
-  );
-  min-height: 100vh;
-  margin: 0;
-  padding: 20px;
-  color: #333;
-  background-attachment: fixed;
-}
 
 .delete-btn {
   color: #ef4444;
