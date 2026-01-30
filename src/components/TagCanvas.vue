@@ -252,14 +252,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <a
-      href="https://tulioportela.com"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="attribution"
-    >
-      by tulioportela.com
-    </a>
   </div>
 </template>
 
