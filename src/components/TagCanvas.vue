@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, type ComponentPublicInstance } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, type ComponentPublicInstance } from 'vue'
 
 // Matter.js types - external library with dynamic types
-
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,40 +9,90 @@ declare global {
   }
 }
 
-// Tags with soft pastel colors
-const tagsData = [
-  { text: 'BUBBLE.IO', color: '#d2f18a', textColor: '#4a8c00' },
-  { text: 'NOCODE', color: '#f0ee8a', textColor: '#9c7b00' },
-  { text: 'EXPRESSION', color: '#e9d6ff', textColor: '#7e3bff' },
-  { text: 'OPTION SET', color: '#ffd1d2', textColor: '#d13438' },
-  { text: 'INTERFACE', color: '#c7e2ff', textColor: '#0078d4' },
-  { text: 'VERSION', color: '#ffe0c9', textColor: '#ca5010' },
-  { text: 'MOBILE', color: '#c9f5e9', textColor: '#0b8a70' },
-  { text: 'UX/UI', color: '#ffd6ef', textColor: '#c2185b' },
-  { text: 'ELEMENT', color: '#d2f18a', textColor: '#4a8c00' },
-  { text: 'REPEATING GROUP', color: '#f0ee8a', textColor: '#9c7b00' },
-  { text: 'API CONNECTOR', color: '#e9d6ff', textColor: '#7e3bff' },
-  { text: 'CUSTOM STATE', color: '#ffd1d2', textColor: '#d13438' },
-  { text: 'CONDITIONAL', color: '#c7e2ff', textColor: '#0078d4' },
-  { text: 'DYNAMIC DATA', color: '#ffe0c9', textColor: '#ca5010' },
-  { text: 'PLUGINS', color: '#c9f5e9', textColor: '#0b8a70' },
-  { text: 'BACKEND WORKFLOW', color: '#f0ee8a', textColor: '#9c7b00' },
-  { text: 'PRIVACY RULES', color: '#c5f0f0', textColor: '#038387' },
-  { text: 'EVENTS', color: '#e9d6ff', textColor: '#7e3bff' },
-  { text: 'DESIGN', color: '#c5f0f0', textColor: '#038387' },
+// Task interface
+interface Task {
+  id: string
+  text: string
+  color: string
+  textColor: string
+}
+
+// Pastel color palette for random selection
+const PASTEL_COLORS = [
+  { bg: '#d2f18a', text: '#4a8c00' }, // green
+  { bg: '#f0ee8a', text: '#9c7b00' }, // yellow
+  { bg: '#e9d6ff', text: '#7e3bff' }, // purple
+  { bg: '#ffd1d2', text: '#d13438' }, // red
+  { bg: '#c7e2ff', text: '#0078d4' }, // blue
+  { bg: '#ffe0c9', text: '#ca5010' }, // orange
+  { bg: '#c9f5e9', text: '#0b8a70' }, // mint
+  { bg: '#ffd6ef', text: '#c2185b' }, // pink
+  { bg: '#c5f0f0', text: '#038387' }, // teal
 ]
 
+const STORAGE_KEY = 'physics-tasks'
+
+// Default tasks
+const DEFAULT_TASKS: Task[] = [
+  { id: '1', text: 'BUBBLE.IO', color: '#d2f18a', textColor: '#4a8c00' },
+  { id: '2', text: 'NOCODE', color: '#f0ee8a', textColor: '#9c7b00' },
+  { id: '3', text: 'EXPRESSION', color: '#e9d6ff', textColor: '#7e3bff' },
+  { id: '4', text: 'MOBILE', color: '#c9f5e9', textColor: '#0b8a70' },
+  { id: '5', text: 'UX/UI', color: '#ffd6ef', textColor: '#c2185b' },
+  { id: '6', text: 'API CONNECTOR', color: '#e9d6ff', textColor: '#7e3bff' },
+  { id: '7', text: 'DESIGN', color: '#c5f0f0', textColor: '#038387' },
+]
+
+// Reactive state
+const tasks = ref<Task[]>([])
+const newTaskText = ref('')
 const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const tagRefs = ref<HTMLDivElement[]>([])
 const isLoaded = ref(false)
+const initializedTaskIds = ref<Set<string>>(new Set()) // Track tasks with physics bodies
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let engine: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let render: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let tagBodies: { body: any; element: HTMLDivElement }[] = []
+let world: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let tagBodies: { id: string; body: any; element: HTMLDivElement }[] = []
+
+// localStorage functions
+const loadTasks = (): Task[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      return JSON.parse(saved)
+    }
+  } catch (e) {
+    console.error('Failed to load tasks:', e)
+  }
+  return DEFAULT_TASKS
+}
+
+const saveTasks = () => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks.value))
+  } catch (e) {
+    console.error('Failed to save tasks:', e)
+  }
+}
+
+// Generate random pastel color
+const getRandomColor = () => {
+  const index = Math.floor(Math.random() * PASTEL_COLORS.length)
+
+  return PASTEL_COLORS[index]!
+}
+
+// Generate unique ID
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
 
 const setTagRef = (el: Element | ComponentPublicInstance | null, index: number) => {
   if (el && el instanceof HTMLDivElement) {
@@ -51,6 +100,94 @@ const setTagRef = (el: Element | ComponentPublicInstance | null, index: number) 
   }
 }
 
+// Add new task
+const addTask = async () => {
+  const text = newTaskText.value.trim().toUpperCase()
+  if (!text) return
+
+  const color = getRandomColor()
+  const newTask: Task = {
+    id: generateId(),
+    text,
+    color: color.bg,
+    textColor: color.text,
+  }
+
+  tasks.value.push(newTask)
+  newTaskText.value = ''
+  saveTasks()
+
+  // Wait for DOM to update, then add physics body
+  await nextTick()
+  setTimeout(() => addPhysicsBody(newTask, tasks.value.length - 1), 50)
+}
+
+// Add physics body for a single task
+const addPhysicsBody = (task: Task, index: number) => {
+  if (!engine || !containerRef.value) return
+
+  const Matter = window.Matter
+  const Bodies = Matter.Bodies
+  const World = Matter.World
+
+  const element = tagRefs.value[index]
+  if (!element) return
+
+  const containerWidth = containerRef.value.clientWidth
+  const rect = element.getBoundingClientRect()
+  const width = rect.width
+  const height = rect.height
+
+  // Drop from top with random x position
+  const x = Math.random() * (containerWidth - width) + width / 2
+  const y = -height - 50
+
+  const body = Bodies.rectangle(x, y, width, height, {
+    chamfer: { radius: height / 2 },
+    density: 0.001,
+    friction: 0.3,
+    frictionAir: 0.01,
+    restitution: 0.6,
+    render: { fillStyle: 'transparent' },
+  })
+
+  World.add(world, body)
+  tagBodies.push({ id: task.id, body, element })
+
+  // Mark as initialized so it becomes visible
+  initializedTaskIds.value.add(task.id)
+}
+
+// Organize tasks in a grid
+const organizeTasks = () => {
+  if (!engine || !containerRef.value || tagBodies.length === 0) return
+
+  const Matter = window.Matter
+  const Body = Matter.Body
+
+  const containerWidth = containerRef.value.clientWidth
+  const containerHeight = containerRef.value.clientHeight
+
+  const tagsPerRow = 4
+  const rowHeight = 55
+
+  tagBodies.forEach((item, idx) => {
+    const row = Math.floor(idx / tagsPerRow)
+    const col = idx % tagsPerRow
+
+    const xSpacing = containerWidth / (tagsPerRow + 1)
+    const targetX = xSpacing * (col + 1)
+    const targetY = containerHeight - 40 - row * rowHeight
+
+    // Set position and reset velocity/angle
+    Body.setPosition(item.body, { x: targetX, y: targetY })
+    Body.setVelocity(item.body, { x: 0, y: 0 })
+    Body.setAngle(item.body, 0)
+    Body.setAngularVelocity(item.body, 0)
+  })
+}
+
+// Initialize physics
 const initPhysics = () => {
   if (!containerRef.value || !canvasRef.value) return
 
@@ -69,9 +206,10 @@ const initPhysics = () => {
 
   // Create engine
   engine = Engine.create()
+  world = engine.world
   engine.world.gravity.y = 0.8
 
-  // Create renderer (invisible, just for mouse interaction)
+  // Create renderer
   render = Render.create({
     element: container,
     canvas: canvasRef.value,
@@ -81,9 +219,6 @@ const initPhysics = () => {
       height: containerHeight,
       background: 'transparent',
       wireframes: false,
-      showVelocity: false,
-      showAngleIndicator: false,
-      showDebug: false,
     },
   })
 
@@ -113,47 +248,47 @@ const initPhysics = () => {
     { isStatic: true, render: { fillStyle: 'transparent' } },
   )
 
-  World.add(engine.world, [ground, wallLeft, wallRight])
+  World.add(world, [ground, wallLeft, wallRight])
 
-  // Create tag bodies - start them at the BOTTOM (already settled)
-  const tagsPerRow = 4
-  tagBodies = tagRefs.value
-    .map((tagElement, idx) => {
-      if (!tagElement) return null
+  // Create bodies for existing tasks
+  tagBodies = []
+  tagRefs.value.forEach((element, idx) => {
+    if (!element) return
 
-      const rect = tagElement.getBoundingClientRect()
-      const width = rect.width
-      const height = rect.height
+    const task = tasks.value[idx]
+    if (!task) return
 
-      // Spread tags across the bottom, with slight randomness
-      const row = Math.floor(idx / tagsPerRow)
-      const col = idx % tagsPerRow
+    const rect = element.getBoundingClientRect()
+    const width = rect.width
+    const height = rect.height
 
-      // Calculate position - spread across bottom with some randomness
-      const xSpacing = containerWidth / (tagsPerRow + 1)
-      const x = xSpacing * (col + 1) + (Math.random() - 0.5) * 60
-      const y = containerHeight - height / 2 - 20 - row * 55 - Math.random() * 30
+    // Start at bottom, scattered
+    const tagsPerRow = 4
+    const row = Math.floor(idx / tagsPerRow)
+    const col = idx % tagsPerRow
+    const xSpacing = containerWidth / (tagsPerRow + 1)
+    const x = xSpacing * (col + 1) + (Math.random() - 0.5) * 40
+    const y = containerHeight - height / 2 - 20 - row * 55 - Math.random() * 20
+    const angle = (Math.random() - 0.5) * 0.4
 
-      // Random initial rotation
-      const angle = (Math.random() - 0.5) * 0.5
-
-      const body = Bodies.rectangle(x, y, width, height, {
-        chamfer: { radius: height / 2 },
-        density: 0.001,
-        friction: 0.3,
-        frictionAir: 0.01,
-        restitution: 0.6,
-        angle: angle,
-        render: { fillStyle: 'transparent' },
-      })
-
-      World.add(engine.world, body)
-      return { body, element: tagElement }
+    const body = Bodies.rectangle(x, y, width, height, {
+      chamfer: { radius: height / 2 },
+      density: 0.001,
+      friction: 0.3,
+      frictionAir: 0.01,
+      restitution: 0.6,
+      angle,
+      render: { fillStyle: 'transparent' },
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter(Boolean) as { body: any; element: HTMLDivElement }[]
 
-  // Sync DOM positions with physics
+    World.add(world, body)
+    tagBodies.push({ id: task.id, body, element })
+
+    // Mark existing tasks as initialized
+    initializedTaskIds.value.add(task.id)
+  })
+
+  // Sync positions
   const updatePositions = () => {
     tagBodies.forEach(({ body, element }) => {
       const { x, y } = body.position
@@ -166,37 +301,29 @@ const initPhysics = () => {
 
   Events.on(engine, 'afterUpdate', updatePositions)
 
-  // Add mouse constraint for dragging
+  // Mouse constraint
   const mouse = Mouse.create(render.canvas)
-
-  // Fix mouse offset - important for proper drag behavior
   Mouse.setOffset(mouse, { x: 0, y: 0 })
 
   const mouseConstraint = MouseConstraint.create(engine, {
-    mouse: mouse,
-    constraint: {
-      stiffness: 0.2,
-      render: { visible: false },
-    },
+    mouse,
+    constraint: { stiffness: 0.2, render: { visible: false } },
   })
 
-  World.add(engine.world, mouseConstraint)
-
-  // Keep mouse in sync with rendering
+  World.add(world, mouseConstraint)
   render.mouse = mouse
 
-  // Start the engine and renderer
   Render.run(render)
   Engine.run(engine)
 }
 
+// Load Matter.js
 const loadMatterJS = () => {
   return new Promise<void>((resolve) => {
     if (window.Matter) {
       resolve()
       return
     }
-
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js'
     script.onload = () => resolve()
@@ -205,13 +332,12 @@ const loadMatterJS = () => {
 }
 
 onMounted(async () => {
+  // Load tasks from localStorage
+  tasks.value = loadTasks()
+
   await loadMatterJS()
   isLoaded.value = true
-
-  // Wait for DOM to update with tag elements
   await nextTick()
-
-  // Small delay to ensure tags are rendered
   setTimeout(initPhysics, 100)
 })
 
@@ -220,34 +346,48 @@ onUnmounted(() => {
     const Matter = window.Matter
     Matter.Render.stop(render)
     Matter.Engine.clear(engine)
-    Matter.World.clear(engine.world, false)
+    Matter.World.clear(world, false)
   }
 })
+
+// Watch for task changes
+watch(tasks, saveTasks, { deep: true })
 </script>
 
 <template>
   <div class="tag-canvas-wrapper">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <input
+        v-model="newTaskText"
+        type="text"
+        placeholder="New task name..."
+        class="task-input"
+        @keyup.enter="addTask"
+      />
+      <button class="btn btn-add" @click="addTask">Add Task</button>
+      <button class="btn btn-organize" @click="organizeTasks">Organize</button>
+    </div>
+
     <div class="outer-frame">
       <div class="inner-frame">
         <div ref="containerRef" class="tag-canvas">
-          <!-- Hidden canvas for Matter.js mouse interaction -->
           <canvas ref="canvasRef" class="physics-canvas"></canvas>
 
-          <!-- Tag elements -->
           <div
-            v-for="(tag, index) in tagsData"
-            :key="index"
+            v-for="(task, index) in tasks"
+            :key="task.id"
             :ref="(el) => setTagRef(el, index)"
             class="tag"
+            :class="{ 'tag--hidden': !initializedTaskIds.has(task.id) }"
             :style="{
-              backgroundColor: tag.color,
-              color: tag.textColor,
+              backgroundColor: task.color,
+              color: task.textColor,
             }"
           >
-            {{ tag.text }}
+            {{ task.text }}
           </div>
 
-          <!-- Loading state -->
           <div v-if="!isLoaded" class="loading">Loading physics...</div>
         </div>
       </div>
@@ -256,6 +396,74 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Toolbar */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.task-input {
+  flex: 1;
+  min-width: 180px;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  background: white;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.task-input:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    box-shadow 0.2s;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn-add {
+  background: linear-gradient(135deg, #4a8c00, #5ca600);
+  color: white;
+  box-shadow: 0 2px 8px rgba(74, 140, 0, 0.3);
+}
+
+.btn-add:hover {
+  box-shadow: 0 4px 12px rgba(74, 140, 0, 0.4);
+}
+
+.btn-organize {
+  background: linear-gradient(135deg, #0078d4, #0086f0);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 120, 212, 0.3);
+}
+
+.btn-organize:hover {
+  box-shadow: 0 4px 12px rgba(0, 120, 212, 0.4);
+}
+
 /* Main wrapper */
 .tag-canvas-wrapper {
   position: relative;
@@ -269,9 +477,16 @@ onUnmounted(() => {
   .tag-canvas-wrapper {
     padding: 10px;
   }
+  .toolbar {
+    gap: 8px;
+  }
+  .btn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
 }
 
-/* Outer frame - Grey border */
+/* Outer frame */
 .outer-frame {
   position: relative;
   padding: 24px;
@@ -292,7 +507,7 @@ onUnmounted(() => {
   }
 }
 
-/* Inner frame - White border */
+/* Inner frame */
 .inner-frame {
   position: relative;
   padding: 16px;
@@ -320,21 +535,17 @@ onUnmounted(() => {
   border-radius: 20px;
   position: relative;
   overflow: hidden;
-
-  /* Glassmorphism with blue tint */
   background: linear-gradient(
     135deg,
     rgba(235, 245, 255, 0.25) 0%,
     rgba(220, 240, 255, 0.2) 50%,
     rgba(200, 230, 255, 0.15) 100%
   );
-
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(180, 220, 255, 0.3);
 }
 
-/* Main diagonal reflection */
 .tag-canvas::before {
   content: '';
   position: absolute;
@@ -358,7 +569,6 @@ onUnmounted(() => {
   border-radius: 20px;
 }
 
-/* Top edge glow */
 .tag-canvas::after {
   content: '';
   position: absolute;
@@ -382,12 +592,10 @@ onUnmounted(() => {
   .tag-canvas {
     height: 50vh;
     border-radius: 16px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
   }
 }
 
-/* Physics canvas - MUST be on top to capture mouse events for Matter.js */
+/* Physics canvas */
 .physics-canvas {
   position: absolute;
   inset: 0;
@@ -395,7 +603,7 @@ onUnmounted(() => {
   z-index: 30;
 }
 
-/* Tag pill styles */
+/* Tags */
 .tag {
   position: absolute;
   display: inline-flex;
@@ -411,29 +619,22 @@ onUnmounted(() => {
   cursor: grab;
   user-select: none;
   white-space: nowrap;
-  pointer-events: none; /* Matter.js handles interaction via canvas */
-
-  /* Inner shadows for depth/volume */
+  pointer-events: none;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.6),
     inset 0 -1px 0 rgba(0, 0, 0, 0.1),
     0 2px 4px rgba(0, 0, 0, 0.1);
-
-  transition: box-shadow 0.15s ease;
+  opacity: 1;
+  transition: opacity 0.2s ease;
 }
 
-.tag:hover {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-    0 4px 8px rgba(0, 0, 0, 0.15);
+/* Hidden state for new tasks before physics positions them */
+.tag--hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) translate(-9999px, -9999px);
 }
 
-.tag:active {
-  cursor: grabbing;
-}
-
-/* Loading state */
+/* Loading */
 .loading {
   position: absolute;
   inset: 0;
@@ -443,20 +644,5 @@ onUnmounted(() => {
   color: #001d44;
   font-weight: 500;
   z-index: 5;
-}
-
-/* Attribution link */
-.attribution {
-  display: block;
-  text-align: center;
-  font-size: 14px;
-  color: #9ca3af;
-  margin-top: 16px;
-  text-decoration: none;
-  transition: color 0.3s ease;
-}
-
-.attribution:hover {
-  color: #6b7280;
 }
 </style>
