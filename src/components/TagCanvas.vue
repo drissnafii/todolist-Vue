@@ -9,12 +9,16 @@ declare global {
   }
 }
 
-// Task interface
+// Task interface with optional position data
 interface Task {
   id: string
   text: string
   color: string
   textColor: string
+  // Position data (saved when navigating away)
+  x?: number
+  y?: number
+  angle?: number
 }
 
 // Pastel color palette for random selection
@@ -82,6 +86,19 @@ const saveTasks = () => {
   }
 }
 
+// Save current positions to task data
+const savePositions = () => {
+  tagBodies.forEach(({ id, body }) => {
+    const task = tasks.value.find((t) => t.id === id)
+    if (task && body) {
+      task.x = body.position.x
+      task.y = body.position.y
+      task.angle = body.angle
+    }
+  })
+  saveTasks()
+}
+
 // Generate random pastel color
 const getRandomColor = () => {
   const index = Math.floor(Math.random() * PASTEL_COLORS.length)
@@ -119,7 +136,7 @@ const addTask = async () => {
 
   // Wait for DOM to update, then add physics body
   await nextTick()
-  setTimeout(() => addPhysicsBody(newTask, tasks.value.length - 1), 50)
+  setTimeout(() => addPhysicsBody(newTask, tasks.value.length - 1), 10)
 }
 
 // Add physics body for a single task
@@ -262,14 +279,24 @@ const initPhysics = () => {
     const width = rect.width
     const height = rect.height
 
-    // Start at bottom, scattered
-    const tagsPerRow = 4
-    const row = Math.floor(idx / tagsPerRow)
-    const col = idx % tagsPerRow
-    const xSpacing = containerWidth / (tagsPerRow + 1)
-    const x = xSpacing * (col + 1) + (Math.random() - 0.5) * 40
-    const y = containerHeight - height / 2 - 20 - row * 55 - Math.random() * 20
-    const angle = (Math.random() - 0.5) * 0.4
+    // Use saved position if available, otherwise calculate initial position
+    let x: number, y: number, angle: number
+
+    if (task.x !== undefined && task.y !== undefined) {
+      // Restore saved position
+      x = task.x
+      y = task.y
+      angle = task.angle ?? 0
+    } else {
+      // Calculate initial position at bottom
+      const tagsPerRow = 4
+      const row = Math.floor(idx / tagsPerRow)
+      const col = idx % tagsPerRow
+      const xSpacing = containerWidth / (tagsPerRow + 1)
+      x = xSpacing * (col + 1) + (Math.random() - 0.5) * 40
+      y = containerHeight - height / 2 - 20 - row * 55 - Math.random() * 20
+      angle = (Math.random() - 0.5) * 0.4
+    }
 
     const body = Bodies.rectangle(x, y, width, height, {
       chamfer: { radius: height / 2 },
@@ -338,10 +365,14 @@ onMounted(async () => {
   await loadMatterJS()
   isLoaded.value = true
   await nextTick()
-  setTimeout(initPhysics, 100)
+  // Small delay for DOM to be ready, then init physics immediately
+  setTimeout(initPhysics, 10)
 })
 
 onUnmounted(() => {
+  // Save positions before unmounting
+  savePositions()
+
   if (render) {
     const Matter = window.Matter
     Matter.Render.stop(render)
