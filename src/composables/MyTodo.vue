@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Edit, Save } from 'lucide-vue-next'
+import { Edit } from 'lucide-vue-next'
 
 interface Todo {
   id: number
@@ -96,11 +96,16 @@ const appName = ref('My Todolist')
         </div>
 
         <div class="actions">
-          <button @click.stop="toggleEdit(todo)" class="action-btn edit">
-            <Edit v-if="!todo.isEditing" :size="16" />
-            <Save v-else :size="16" />
+          <button v-if="!todo.isEditing" @click.stop="toggleEdit(todo)" class="action-btn edit">
+            <Edit :size="16" />
           </button>
-          <button @click.stop="deleteTodo(todo.id)" class="action-btn delete">×</button>
+          <button
+            v-if="!todo.isEditing"
+            @click.stop="deleteTodo(todo.id)"
+            class="action-btn delete"
+          >
+            ×
+          </button>
         </div>
       </li>
     </ul>
@@ -117,6 +122,8 @@ const appName = ref('My Todolist')
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   border: 5px solid #2d2d2d;
   background: #fafafa;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 /* Style the header */
@@ -140,6 +147,8 @@ const appName = ref('My Todolist')
   display: flex;
   margin-bottom: 10px;
   border: 3px solid #2d2d2d;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .header input {
@@ -268,6 +277,7 @@ ul li.checked::before {
   font-family: inherit;
   border: 3px solid #2d2d2d;
   font-weight: 500;
+  border-radius: 8px;
 }
 
 /* Action buttons */
@@ -283,7 +293,7 @@ ul li.checked::before {
   background: #ffe4b5;
   padding: 8px;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 8px;
   font-size: 20px;
   color: #2d2d2d;
   display: flex;
