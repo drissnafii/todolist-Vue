@@ -102,7 +102,7 @@ const setTagRef = (el: Element | ComponentPublicInstance | null, index: number) 
 
 // Add new task
 const addTask = async () => {
-  const text = newTaskText.value.trim().toUpperCase()
+  const text = newTaskText.value.trim()
   if (!text) return
 
   const color = getRandomColor()
@@ -612,7 +612,6 @@ watch(tasks, saveTasks, { deep: true })
   padding: 0 16px;
   height: 40px;
   font-size: 14px;
-  text-transform: uppercase;
   font-weight: 600;
   border-radius: 20px;
   z-index: 20;
